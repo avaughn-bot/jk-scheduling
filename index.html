@@ -760,7 +760,7 @@
                                             </div>
                                         ))}
 
-                                        {teams[selectedTeam].map(person => (
+                                        {teams[selectedTeam] && teams[selectedTeam].map(person => (
                                             <React.Fragment key={person.name}>
                                                 <div style={styles.staffCell}>
                                                     <div style={styles.staffName}>{person.name}</div>
@@ -814,7 +814,7 @@
                                                         <>
                                                             <div style={styles.monthDayNumber}>{date.getDate()}</div>
                                                             <div style={styles.monthAssignments}>
-                                                                {teams[selectedTeam].map(person => {
+                                                           {teams[selectedTeam] && teams[selectedTeam].map(person => {
                                                                     const key = `${person.name}-${formatDate(date)}`;
                                                                     const assignment = assignments[key];
                                                                     if (assignment) {
