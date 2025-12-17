@@ -63,18 +63,20 @@
 
             const [teams, setTeams] = useState(defaultTeams);
 
-            const offices = {
-                'Calumet City': [
-                    'CC Desk #1', 'CC Desk #2', 'CC Desk #3', 'CC Desk #4', 'CC Desk #5', 'CC Desk #6',
-                    'CC Up Desk #1', 'CC Up Desk #2', 'CC Up Desk #3',
-                    'CC Office', 'CC Rec', 'CC Conf'
-                ],
-                'Mokena': [
-                    'Mokena Desk #1', 'Mokena Desk #2', 'Mokena Desk #3',
-                    'Mokena Desk #4', 'Mokena Desk #5', 'Mokena Desk #6',
-                    'Mokena Office #1', 'Mokena Office #2', 'Mokena Conf'
-                ]
-            };
+const defaultOffices = {
+    'Calumet City': [
+        'CC Desk #1', 'CC Desk #2', 'CC Desk #3', 'CC Desk #4', 'CC Desk #5', 'CC Desk #6',
+        'CC Up Desk #1', 'CC Up Desk #2', 'CC Up Desk #3',
+        'CC Office', 'CC Rec', 'CC Conf'
+    ],
+    'Mokena': [
+        'Mokena Desk #1', 'Mokena Desk #2', 'Mokena Desk #3',
+        'Mokena Desk #4', 'Mokena Desk #5', 'Mokena Desk #6',
+        'Mokena Office #1', 'Mokena Office #2', 'Mokena Conf'
+    ]
+};
+
+const [offices, setOffices] = useState(defaultOffices);
 
             const [currentWeekStart, setCurrentWeekStart] = useState(new Date(2025, 11, 15));
             const [currentMonth, setCurrentMonth] = useState(new Date(2025, 11, 1)); // December 2025
@@ -88,6 +90,9 @@
             const [staffModalOpen, setStaffModalOpen] = useState(false);
             const [editingStaff, setEditingStaff] = useState(null);
             const [bulkScheduleModalOpen, setBulkScheduleModalOpen] = useState(false);
+            const [deskModalOpen, setDeskModalOpen] = useState(false);
+const [editingDesk, setEditingDesk] = useState(null);
+const [officeModalOpen, setOfficeModalOpen] = useState(false);
             const [loading, setLoading] = useState(true);
 
             useEffect(() => {
@@ -105,20 +110,21 @@
                         setTeams(teamsData);
                     }
                     
-                    // Load assignments
-                    const assignmentsResponse = await fetch(`${APPS_SCRIPT_URL}?action=loadAssignments`);
-                    const assignmentsData = await assignmentsResponse.json();
-                    if (!assignmentsData.error) {
-                        setAssignments(assignmentsData);
-                    }
-                    
-                    setLoading(false);
-                } catch (error) {
-                    console.error('Error loading data:', error);
-                    alert('Failed to load data from Google Sheets. Using default teams. Check console for details.');
-                    setLoading(false);
-                }
-            };
+                  // Load assignments
+const assignmentsResponse = await fetch(`${APPS_SCRIPT_URL}?action=loadAssignments`);
+const assignmentsData = await assignmentsResponse.json();
+if (!assignmentsData.error) {
+    setAssignments(assignmentsData);
+}
+
+// Load offices/desks
+const officesResponse = await fetch(`${APPS_SCRIPT_URL}?action=loadOffices`);
+const officesData = await officesResponse.json();
+if (!officesData.error && Object.keys(officesData).length > 0) {
+    setOffices(officesData);
+}
+
+setLoading(false);
 
             useEffect(() => {
                 // Removed: No longer saving to localStorage
@@ -338,7 +344,7 @@
                     }
                 });
 
-                const totalDesks = offices['Calumet City'].length + offices['Mokena'].length;
+                const totalDesks = Object.values(offices).flat().length;
                 const availableDesks = totalDesks - occupiedDesks.size;
 
                 return { scheduledToday, availableDesks };
@@ -538,6 +544,102 @@
                 }
             };
 
+            const saveOffices = async (updatedOffices) => {
+                try {
+                    await fetch(APPS_SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'saveOffices',
+                            offices: updatedOffices
+                        })
+                    });
+                } catch (error) {
+                    console.error('Error saving offices:', error);
+                    alert('Warning: Office changes may not have synced to Google Sheets.');
+                }
+            };const addDesk = async (officeName, deskName) => {
+    const updatedOffices = {
+        ...offices,
+        [officeName]: [...offices[officeName], deskName]
+    };
+    setOffices(updatedOffices);
+    setDeskModalOpen(false);
+    setEditingDesk(null);
+    await saveOffices(updatedOffices);
+};
+
+const updateDesk = async (officeName, oldDeskName, newDeskName) => {
+    const updatedOffices = {
+        ...offices,
+        [officeName]: offices[officeName].map(desk => desk === oldDeskName ? newDeskName : desk)
+    };
+    setOffices(updatedOffices);
+    
+    setAssignments(prev => {
+        const updated = {};
+        Object.entries(prev).forEach(([key, value]) => {
+            if (value.desk === oldDeskName) {
+                updated[key] = {...value, desk: newDeskName};
+            } else {
+                updated[key] = value;
+            }
+        });
+        return updated;
+    });
+    
+    setDeskModalOpen(false);
+    setEditingDesk(null);
+    await saveOffices(updatedOffices);
+};
+
+const removeDesk = async (officeName, deskName) => {
+    if (!confirm(`Remove desk "${deskName}"? Assignments using this desk will have desk removed.`)) return;
+    
+    const updatedOffices = {
+        ...offices,
+        [officeName]: offices[officeName].filter(desk => desk !== deskName)
+    };
+    setOffices(updatedOffices);
+    
+    setAssignments(prev => {
+        const updated = {};
+        Object.entries(prev).forEach(([key, value]) => {
+            if (value.desk === deskName) {
+                updated[key] = {...value, desk: ''};
+            } else {
+                updated[key] = value;
+            }
+        });
+        return updated;
+    });
+    
+    await saveOffices(updatedOffices);
+};
+
+const addOffice = async (officeName) => {
+    if (!officeName || offices[officeName]) {
+        setOfficeModalOpen(false);
+        return;
+    }
+    
+    const updatedOffices = {
+        ...offices,
+        [officeName]: []
+    };
+    setOffices(updatedOffices);
+    setOfficeModalOpen(false);
+    await saveOffices(updatedOffices);
+};
+
+const removeOffice = async (officeName) => {
+    if (!confirm(`Delete office "${officeName}" and all its desks?`)) return;
+    
+    const updatedOffices = {...offices};
+    delete updatedOffices[officeName];
+    setOffices(updatedOffices);
+    await saveOffices(updatedOffices);
+};
+
             const stats = getStats();
             const totalStaff = Object.values(teams).flat().length;
 
@@ -611,9 +713,15 @@
                                     onClick={() => setViewMode('teams')}
                                     style={{...styles.viewButton, ...(viewMode === 'teams' ? styles.viewButtonActive : {})}}
                                 >
-                                    Manage Teams
-                                </button>
-                            </div>
+                                Manage Teams
+                            </button>
+                            <button
+                                onClick={() => setViewMode('manageDesks')}
+                                style={{...styles.viewButton, ...(viewMode === 'manageDesks' ? styles.viewButtonActive : {})}}
+                            >
+                                Manage Desks
+                            </button>
+                        </div>
 
                             {/* Bulk Schedule Button */}
                             {viewMode === 'schedule' && (
@@ -801,6 +909,70 @@
                                 </div>
                             ))}
                         </div>
+                            ) : viewMode === 'manageDesks' ? (
+    <div style={styles.deskManagement}>
+        <div style={styles.managementHeader}>
+            <h2 style={styles.managementTitle}>Desk & Office Management</h2>
+            <button onClick={() => setOfficeModalOpen(true)} style={styles.addTeamBtn}>
+                + Add New Office
+            </button>
+        </div>
+
+        {Object.entries(offices).map(([officeName, desks]) => (
+            <div key={officeName} style={styles.teamManagementCard}>
+                <div style={styles.teamCardHeader}>
+                    <h3 style={styles.teamCardTitle}>🏢 {officeName}</h3>
+                    <div style={styles.teamCardActions}>
+                        <button 
+                            onClick={() => {
+                                setEditingDesk({ officeName, isNew: true });
+                                setDeskModalOpen(true);
+                            }} 
+                            style={styles.addStaffBtn}
+                        >
+                            + Add Desk
+                        </button>
+                        <button 
+                            onClick={() => removeOffice(officeName)} 
+                            style={styles.deleteTeamBtn}
+                        >
+                            Delete Office
+                        </button>
+                    </div>
+                </div>
+                <div style={styles.staffMembersList}>
+                    {desks.length === 0 ? (
+                        <p style={styles.emptyTeam}>No desks in this office yet.</p>
+                    ) : (
+                        desks.map(desk => (
+                            <div key={desk} style={styles.staffMemberCard}>
+                                <div>
+                                    <div style={styles.memberName}>{desk}</div>
+                                </div>
+                                <div style={styles.memberActions}>
+                                    <button 
+                                        onClick={() => {
+                                            setEditingDesk({ officeName, desk, isNew: false });
+                                            setDeskModalOpen(true);
+                                        }}
+                                        style={styles.editBtn}
+                                    >
+                                        Edit
+                                    </button>
+                                    <button 
+                                        onClick={() => removeDesk(officeName, desk)}
+                                        style={styles.removeBtn}
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        ))}
+    </div>
                     ) : (
                         <div style={styles.teamManagement}>
                             <div style={styles.managementHeader}>
@@ -941,12 +1113,35 @@
                             }}
                             onClose={() => setBulkScheduleModalOpen(false)}
                         />
-                    )}
+                    )}{deskModalOpen && (
+    <DeskModal
+        editingDesk={editingDesk}
+        onSave={(deskName) => {
+            if (editingDesk.isNew) {
+                addDesk(editingDesk.officeName, deskName);
+            } else {
+                updateDesk(editingDesk.officeName, editingDesk.desk, deskName);
+            }
+        }}
+        onClose={() => {
+            setDeskModalOpen(false);
+            setEditingDesk(null);
+        }}
+    />
+)}
+
+{officeModalOpen && (
+    <OfficeModal
+        onSave={addOffice}
+        onClose={() => setOfficeModalOpen(false)}
+    />
+)}
                     </>
                     )}
                 </div>
             );
         };
+                    
 
         const AssignmentModal = ({ assignment, offices, onSave, onDelete, onClose, checkDeskConflict }) => {
             const [formData, setFormData] = useState({
@@ -1266,7 +1461,82 @@
                     };
                 }
             };
+ const DeskModal = ({ editingDesk, onSave, onClose }) => {
+            const [deskName, setDeskName] = useState(editingDesk?.desk || '');
 
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(deskName);
+            };
+
+            return (
+                <div style={styles.modalOverlay} onClick={onClose}>
+                    <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.modalHeader}>
+                            <h2 style={styles.modalTitle}>
+                                {editingDesk?.isNew ? 'Add' : 'Edit'} Desk - {editingDesk?.officeName}
+                            </h2>
+                            <button onClick={onClose} style={styles.closeButton}>×</button>
+                        </div>
+                        <form onSubmit={handleSubmit}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Desk Name</label>
+                                <input
+                                    type="text"
+                                    value={deskName}
+                                    onChange={(e) => setDeskName(e.target.value)}
+                                    style={styles.input}
+                                    placeholder="e.g., CC Desk #7"
+                                    required
+                                />
+                            </div>
+                            <div style={styles.buttonGroup}>
+                                <button type="submit" style={styles.saveButton}>
+                                    {editingDesk?.isNew ? 'Add' : 'Update'} Desk
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const OfficeModal = ({ onSave, onClose }) => {
+            const [officeName, setOfficeName] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(officeName);
+                setOfficeName('');
+            };
+
+            return (
+                <div style={styles.modalOverlay} onClick={onClose}>
+                    <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.modalHeader}>
+                            <h2 style={styles.modalTitle}>Add New Office</h2>
+                            <button onClick={onClose} style={styles.closeButton}>×</button>
+                        </div>
+                        <form onSubmit={handleSubmit}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Office Name</label>
+                                <input
+                                    type="text"
+                                    value={officeName}
+                                    onChange={(e) => setOfficeName(e.target.value)}
+                                    style={styles.input}
+                                    placeholder="e.g., Chicago Office"
+                                    required
+                                />
+                            </div>
+                            <div style={styles.buttonGroup}>
+                                <button type="submit" style={styles.saveButton}>Create Office</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
             // Check for desk conflicts in bulk scheduling
             useEffect(() => {
                 if (!formData.desk || (formData.location !== 'Calumet City' && formData.location !== 'Mokena')) {
@@ -1984,6 +2254,11 @@
                 fontWeight: '600',
                 cursor: 'pointer',
                 fontSize: '14px'
+            },
+            deskManagement: {
+                padding: '30px',
+                background: 'white',
+                borderRadius: '0 0 20px 20px'
             },
             teamManagement: {
                 padding: '30px',
