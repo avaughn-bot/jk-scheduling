@@ -95,6 +95,7 @@
             const [deskModalOpen, setDeskModalOpen] = useState(false);
             const [editingDesk, setEditingDesk] = useState(null);
             const [officeModalOpen, setOfficeModalOpen] = useState(false);
+            const [calendarExportModalOpen, setCalendarExportModalOpen] = useState(false);
             const [loading, setLoading] = useState(true);
 
             useEffect(() => {
@@ -623,6 +624,71 @@
                 await saveOffices(updatedOffices);
             };
 
+            const exportToCalendar = (staffName, startDate, endDate) => {
+                const staffAssignments = [];
+
+                // Collect all assignments for this staff member in date range
+                Object.entries(assignments).forEach(([key, assignment]) => {
+                    if (key.startsWith(staffName + '-')) {
+                        const dateStr = key.substring(staffName.length + 1);
+                        const date = new Date(dateStr);
+
+                        if (date >= startDate && date <= endDate) {
+                            staffAssignments.push({
+                                date: date,
+                                ...assignment
+                            });
+                        }
+                    }
+                });
+
+                // Generate .ics file
+                let icsContent = 'BEGIN:VCALENDAR\r\n';
+                icsContent += 'VERSION:2.0\r\n';
+                icsContent += 'PRODID:-//JK Co.//Scheduling//EN\r\n';
+                icsContent += 'CALSCALE:GREGORIAN\r\n';
+                icsContent += 'METHOD:PUBLISH\r\n';
+                icsContent += 'X-WR-CALNAME:' + staffName + ' Schedule\r\n';
+                icsContent += 'X-WR-TIMEZONE:America/Chicago\r\n';
+
+                staffAssignments.forEach((assignment) => {
+                    const date = assignment.date;
+                    const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
+
+                    const location = assignment.location === 'Client' && assignment.clientName
+                        ? assignment.clientName
+                        : assignment.location;
+
+                    const summary = `${location}${assignment.desk ? ' - ' + assignment.desk : ''}`;
+                    const description = assignment.task || '';
+
+                    icsContent += 'BEGIN:VEVENT\r\n';
+                    icsContent += 'DTSTART;VALUE=DATE:' + dateStr + '\r\n';
+                    icsContent += 'DTEND;VALUE=DATE:' + dateStr + '\r\n';
+                    icsContent += 'SUMMARY:' + summary + '\r\n';
+                    icsContent += 'DESCRIPTION:' + description.replace(/\n/g, '\\n') + '\r\n';
+                    if (assignment.desk) {
+                        icsContent += 'LOCATION:' + assignment.desk + '\r\n';
+                    }
+                    icsContent += 'STATUS:CONFIRMED\r\n';
+                    icsContent += 'UID:' + staffName + '-' + dateStr + '@jkscheduling.com\r\n';
+                    icsContent += 'END:VEVENT\r\n';
+                });
+
+                icsContent += 'END:VCALENDAR\r\n';
+
+                // Trigger download
+                const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+                const link = document.createElement('a');
+                link.href = window.URL.createObjectURL(blob);
+                link.setAttribute('download', `${staffName}_schedule.ics`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                setCalendarExportModalOpen(false);
+            };
+
             const stats = getStats();
             const totalStaff = Object.values(teams).flat().length;
 
@@ -704,12 +770,20 @@
                             </div>
 
                             {viewMode === 'schedule' && (
-                                <button
-                                    onClick={() => setBulkScheduleModalOpen(true)}
-                                    style={styles.bulkScheduleButton}
-                                >
-                                    📅 Bulk Schedule
-                                </button>
+                                <>
+                                    <button
+                                        onClick={() => setBulkScheduleModalOpen(true)}
+                                        style={styles.bulkScheduleButton}
+                                    >
+                                        📅 Bulk Schedule
+                                    </button>
+                                    <button
+                                        onClick={() => setCalendarExportModalOpen(true)}
+                                        style={styles.exportCalendarButton}
+                                    >
+                                        📥 Export Calendar
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>
@@ -1086,6 +1160,15 @@
                                 }
                             }}
                             onClose={() => setBulkScheduleModalOpen(false)}
+                        />
+                    )}
+
+                    {calendarExportModalOpen && (
+                        <CalendarExportModal
+                            teams={teams}
+                            selectedTeam={selectedTeam}
+                            onExport={exportToCalendar}
+                            onClose={() => setCalendarExportModalOpen(false)}
                         />
                     )}
 
@@ -1898,6 +1981,101 @@
             );
         };
 
+        const CalendarExportModal = ({ teams, selectedTeam, onExport, onClose }) => {
+            const [selectedStaff, setSelectedStaff] = useState('');
+            const [startDate, setStartDate] = useState(() => {
+                const today = new Date();
+                return today.toISOString().split('T')[0];
+            });
+            const [endDate, setEndDate] = useState(() => {
+                const today = new Date();
+                const nextMonth = new Date(today);
+                nextMonth.setMonth(nextMonth.getMonth() + 1);
+                return nextMonth.toISOString().split('T')[0];
+            });
+
+            const teamMembers = teams[selectedTeam] || [];
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!selectedStaff) {
+                    alert('Please select a staff member');
+                    return;
+                }
+                onExport(selectedStaff, new Date(startDate), new Date(endDate));
+            };
+
+            return (
+                <div style={styles.modalOverlay} onClick={onClose}>
+                    <div style={{...styles.modalContent, maxWidth: '500px'}} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.modalHeader}>
+                            <h2 style={styles.modalTitle}>📥 Export to Calendar</h2>
+                            <button onClick={onClose} style={styles.closeButton}>×</button>
+                        </div>
+
+                        <form onSubmit={handleSubmit}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Select Staff Member</label>
+                                <select
+                                    value={selectedStaff}
+                                    onChange={(e) => setSelectedStaff(e.target.value)}
+                                    style={styles.input}
+                                    required
+                                >
+                                    <option value="">Choose a staff member...</option>
+                                    {teamMembers.map(member => (
+                                        <option key={member.name} value={member.name}>
+                                            {member.name} - {member.role}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Start Date</label>
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    style={styles.input}
+                                    required
+                                />
+                            </div>
+
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>End Date</label>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    style={styles.input}
+                                    required
+                                />
+                            </div>
+
+                            <div style={{...styles.formGroup, background: '#ebf8ff', padding: '15px', borderRadius: '8px'}}>
+                                <strong>📌 How to use:</strong>
+                                <ol style={{margin: '10px 0', paddingLeft: '20px', fontSize: '14px'}}>
+                                    <li>Click "Export" to download a .ics calendar file</li>
+                                    <li>Open the file or import it into Google Calendar, Outlook, or Apple Calendar</li>
+                                    <li>All assignments will appear as calendar events</li>
+                                </ol>
+                            </div>
+
+                            <div style={styles.buttonGroup}>
+                                <button type="submit" style={styles.saveButton}>
+                                    📥 Export
+                                </button>
+                                <button type="button" onClick={onClose} style={styles.cancelButton}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
         const styles = {
             container: {
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -2439,6 +2617,17 @@
             bulkScheduleButton: {
                 padding: '8px 20px',
                 background: '#48bb78',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                fontSize: '14px',
+                transition: 'all 0.3s'
+            },
+            exportCalendarButton: {
+                padding: '8px 20px',
+                background: '#667eea',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
