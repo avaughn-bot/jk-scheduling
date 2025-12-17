@@ -82,6 +82,7 @@
                 return new Date(today.setDate(diff));
             });
             const [currentMonth, setCurrentMonth] = useState(new Date());
+            const [currentYear, setCurrentYear] = useState(new Date());
             const [assignments, setAssignments] = useState({});
             const [selectedTeam, setSelectedTeam] = useState('Audit - DC');
             const [viewMode, setViewMode] = useState('schedule');
@@ -163,6 +164,19 @@
                 }
 
                 return days;
+            };
+
+            const getMonthsInYear = () => {
+                const year = currentYear.getFullYear();
+                const months = [];
+                for (let month = 0; month < 12; month++) {
+                    months.push({
+                        date: new Date(year, month, 1),
+                        name: new Date(year, month, 1).toLocaleDateString('en-US', { month: 'short' }),
+                        fullName: new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long' })
+                    });
+                }
+                return months;
             };
 
             const checkDeskConflict = (desk, date, currentStaffName) => {
@@ -306,6 +320,22 @@
                 setCurrentMonth(prev => {
                     const newDate = new Date(prev);
                     newDate.setMonth(newDate.getMonth() + 1);
+                    return newDate;
+                });
+            };
+
+            const prevYear = () => {
+                setCurrentYear(prev => {
+                    const newDate = new Date(prev);
+                    newDate.setFullYear(newDate.getFullYear() - 1);
+                    return newDate;
+                });
+            };
+
+            const nextYear = () => {
+                setCurrentYear(prev => {
+                    const newDate = new Date(prev);
+                    newDate.setFullYear(newDate.getFullYear() + 1);
                     return newDate;
                 });
             };
@@ -652,12 +682,18 @@
                                     >
                                         Month
                                     </button>
+                                    <button
+                                        onClick={() => setScheduleView('year')}
+                                        style={{...styles.viewButton, ...(scheduleView === 'year' ? styles.viewButtonActive : {})}}
+                                    >
+                                        Year
+                                    </button>
                                 </div>
                             )}
 
                             <div style={styles.weekNav}>
                                 <button
-                                    onClick={scheduleView === 'week' ? prevWeek : prevMonth}
+                                    onClick={scheduleView === 'week' ? prevWeek : scheduleView === 'month' ? prevMonth : prevYear}
                                     style={styles.navButton}
                                 >
                                     ◀ Prev
@@ -665,11 +701,13 @@
                                 <div style={styles.weekDisplay}>
                                     {scheduleView === 'week'
                                         ? `Week of ${currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                                        : currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                                        : scheduleView === 'month'
+                                        ? currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                                        : currentYear.getFullYear()
                                     }
                                 </div>
                                 <button
-                                    onClick={scheduleView === 'week' ? nextWeek : nextMonth}
+                                    onClick={scheduleView === 'week' ? nextWeek : scheduleView === 'month' ? nextMonth : nextYear}
                                     style={styles.navButton}
                                 >
                                     Next ▶
@@ -799,7 +837,7 @@
                                             </React.Fragment>
                                         ))}
                                     </div>
-                                ) : (
+                                ) : scheduleView === 'month' ? (
                                     <div>
                                         <div style={styles.monthCalendarHeader}>
                                             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -854,6 +892,68 @@
                                                         </>
                                                     )}
                                                 </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={styles.yearViewContainer}>
+                                        <div style={styles.yearGrid}>
+                                            <div style={{...styles.gridHeader, ...styles.staffColumn}}>Staff</div>
+                                            {getMonthsInYear().map((month, i) => (
+                                                <div key={i} style={styles.gridHeader}>
+                                                    {month.name}
+                                                </div>
+                                            ))}
+
+                                            {teams[selectedTeam].map(person => (
+                                                <React.Fragment key={person.name}>
+                                                    <div style={styles.staffCell}>
+                                                        <div style={styles.staffName}>{person.name}</div>
+                                                        <div style={styles.staffRole}>{person.role}</div>
+                                                    </div>
+                                                    {getMonthsInYear().map((month, i) => {
+                                                        // Count assignments in this month for this person
+                                                        const year = month.date.getFullYear();
+                                                        const monthNum = month.date.getMonth();
+                                                        const daysInMonth = new Date(year, monthNum + 1, 0).getDate();
+
+                                                        let assignmentCount = 0;
+                                                        let assignmentDetails = [];
+
+                                                        for (let day = 1; day <= daysInMonth; day++) {
+                                                            const date = new Date(year, monthNum, day);
+                                                            const key = `${person.name}-${formatDate(date)}`;
+                                                            const assignment = assignments[key];
+                                                            if (assignment) {
+                                                                assignmentCount++;
+                                                                assignmentDetails.push({
+                                                                    day: day,
+                                                                    location: assignment.location === 'Client' && assignment.clientName
+                                                                        ? assignment.clientName
+                                                                        : assignment.location
+                                                                });
+                                                            }
+                                                        }
+
+                                                        return (
+                                                            <div
+                                                                key={i}
+                                                                style={{
+                                                                    ...styles.yearCell,
+                                                                    ...(assignmentCount > 0 ? styles.yearCellWithAssignments : {})
+                                                                }}
+                                                                title={assignmentDetails.map(a => `${a.day}: ${a.location}`).join('\n')}
+                                                            >
+                                                                {assignmentCount > 0 && (
+                                                                    <div style={styles.yearAssignmentSummary}>
+                                                                        <div style={styles.yearAssignmentCount}>{assignmentCount}</div>
+                                                                        <div style={styles.yearAssignmentLabel}>days</div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </React.Fragment>
                                             ))}
                                         </div>
                                     </div>
@@ -2425,6 +2525,47 @@
                 textAlign: 'center',
                 transition: 'all 0.2s',
                 marginTop: 'auto'
+            },
+            yearViewContainer: {
+                overflowX: 'auto'
+            },
+            yearGrid: {
+                display: 'grid',
+                gridTemplateColumns: '200px repeat(12, minmax(100px, 1fr))',
+                gap: '2px',
+                background: '#e2e8f0',
+                borderRadius: '10px',
+                overflow: 'hidden',
+                minWidth: '1500px'
+            },
+            yearCell: {
+                background: 'white',
+                padding: '20px',
+                minHeight: '80px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+                cursor: 'pointer'
+            },
+            yearCellWithAssignments: {
+                background: 'linear-gradient(135deg, #e6f3ff 0%, #f0e6ff 100%)',
+                borderLeft: '4px solid #667eea'
+            },
+            yearAssignmentSummary: {
+                textAlign: 'center'
+            },
+            yearAssignmentCount: {
+                fontSize: '24px',
+                fontWeight: '700',
+                color: '#667eea',
+                marginBottom: '2px'
+            },
+            yearAssignmentLabel: {
+                fontSize: '11px',
+                color: '#718096',
+                fontWeight: '600',
+                textTransform: 'uppercase'
             },
             conflictWarning: {
                 color: '#f56565',
