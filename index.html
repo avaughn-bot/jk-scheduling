@@ -19,7 +19,6 @@
         // ============================================
         // REPLACE THIS WITH YOUR WEB APP URL!
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzetKtBwatIyfkSWOEtG1wKLWTdMXjGxVlIswIjgmhlBL7moslRp2Jq32UypDQoNWV20Q/exec';
-        
 
         const SchedulingApp = () => {
             // Default teams based on Excel structure
@@ -61,29 +60,32 @@
                 ]
             };
 
+            const defaultOffices = {
+                'Calumet City': [
+                    'CC Desk #1', 'CC Desk #2', 'CC Desk #3', 'CC Desk #4', 'CC Desk #5', 'CC Desk #6',
+                    'CC Up Desk #1', 'CC Up Desk #2', 'CC Up Desk #3',
+                    'CC Office', 'CC Rec', 'CC Conf'
+                ],
+                'Mokena': [
+                    'Mokena Desk #1', 'Mokena Desk #2', 'Mokena Desk #3',
+                    'Mokena Desk #4', 'Mokena Desk #5', 'Mokena Desk #6',
+                    'Mokena Office #1', 'Mokena Office #2', 'Mokena Conf'
+                ]
+            };
+
             const [teams, setTeams] = useState(defaultTeams);
-
-const defaultOffices = {
-    'Calumet City': [
-        'CC Desk #1', 'CC Desk #2', 'CC Desk #3', 'CC Desk #4', 'CC Desk #5', 'CC Desk #6',
-        'CC Up Desk #1', 'CC Up Desk #2', 'CC Up Desk #3',
-        'CC Office', 'CC Rec', 'CC Conf'
-    ],
-    'Mokena': [
-        'Mokena Desk #1', 'Mokena Desk #2', 'Mokena Desk #3',
-        'Mokena Desk #4', 'Mokena Desk #5', 'Mokena Desk #6',
-        'Mokena Office #1', 'Mokena Office #2', 'Mokena Conf'
-    ]
-};
-
-const [offices, setOffices] = useState(defaultOffices);
-
-            const [currentWeekStart, setCurrentWeekStart] = useState(new Date(2025, 11, 15));
-            const [currentMonth, setCurrentMonth] = useState(new Date(2025, 11, 1)); // December 2025
+            const [offices, setOffices] = useState(defaultOffices);
+            const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+                const today = new Date();
+                const dayOfWeek = today.getDay();
+                const diff = today.getDate() - dayOfWeek;
+                return new Date(today.setDate(diff));
+            });
+            const [currentMonth, setCurrentMonth] = useState(new Date());
             const [assignments, setAssignments] = useState({});
             const [selectedTeam, setSelectedTeam] = useState('Audit - DC');
             const [viewMode, setViewMode] = useState('schedule');
-            const [scheduleView, setScheduleView] = useState('week'); // 'week' or 'month'
+            const [scheduleView, setScheduleView] = useState('week');
             const [modalOpen, setModalOpen] = useState(false);
             const [currentAssignment, setCurrentAssignment] = useState(null);
             const [teamModalOpen, setTeamModalOpen] = useState(false);
@@ -91,8 +93,8 @@ const [offices, setOffices] = useState(defaultOffices);
             const [editingStaff, setEditingStaff] = useState(null);
             const [bulkScheduleModalOpen, setBulkScheduleModalOpen] = useState(false);
             const [deskModalOpen, setDeskModalOpen] = useState(false);
-const [editingDesk, setEditingDesk] = useState(null);
-const [officeModalOpen, setOfficeModalOpen] = useState(false);
+            const [editingDesk, setEditingDesk] = useState(null);
+            const [officeModalOpen, setOfficeModalOpen] = useState(false);
             const [loading, setLoading] = useState(true);
 
             useEffect(() => {
@@ -102,37 +104,35 @@ const [officeModalOpen, setOfficeModalOpen] = useState(false);
             const loadDataFromGoogleSheets = async () => {
                 try {
                     setLoading(true);
-                    
+
                     // Load teams
                     const teamsResponse = await fetch(`${APPS_SCRIPT_URL}?action=loadTeams`);
                     const teamsData = await teamsResponse.json();
                     if (!teamsData.error && Object.keys(teamsData).length > 0) {
                         setTeams(teamsData);
                     }
-                    
-                  // Load assignments
-const assignmentsResponse = await fetch(`${APPS_SCRIPT_URL}?action=loadAssignments`);
-const assignmentsData = await assignmentsResponse.json();
-if (!assignmentsData.error) {
-    setAssignments(assignmentsData);
-}
 
-// Load offices/desks
-const officesResponse = await fetch(`${APPS_SCRIPT_URL}?action=loadOffices`);
-const officesData = await officesResponse.json();
-if (!officesData.error && Object.keys(officesData).length > 0) {
-    setOffices(officesData);
-}
+                    // Load assignments
+                    const assignmentsResponse = await fetch(`${APPS_SCRIPT_URL}?action=loadAssignments`);
+                    const assignmentsData = await assignmentsResponse.json();
+                    if (!assignmentsData.error) {
+                        setAssignments(assignmentsData);
+                    }
 
-setLoading(false);
+                    // Load offices/desks
+                    const officesResponse = await fetch(`${APPS_SCRIPT_URL}?action=loadOffices`);
+                    const officesData = await officesResponse.json();
+                    if (!officesData.error && Object.keys(officesData).length > 0) {
+                        setOffices(officesData);
+                    }
 
-            useEffect(() => {
-                // Removed: No longer saving to localStorage
-            }, [assignments]);
-
-            useEffect(() => {
-                // Removed: No longer saving to localStorage
-            }, [teams]);
+                    setLoading(false);
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                    alert('Failed to load data from Google Sheets. Using default teams. Check console for details.');
+                    setLoading(false);
+                }
+            };
 
             const getDaysOfWeek = () => {
                 const days = [];
@@ -150,41 +150,35 @@ setLoading(false);
                 const firstDay = new Date(year, month, 1);
                 const lastDay = new Date(year, month + 1, 0);
                 const daysInMonth = lastDay.getDate();
-                
-                // Get the day of week for the first day (0 = Sunday)
+
                 const startingDayOfWeek = firstDay.getDay();
-                
                 const days = [];
-                
-                // Add empty cells for days before the month starts
+
                 for (let i = 0; i < startingDayOfWeek; i++) {
                     days.push(null);
                 }
-                
-                // Add all days in the month
+
                 for (let day = 1; day <= daysInMonth; day++) {
                     days.push(new Date(year, month, day));
                 }
-                
+
                 return days;
             };
 
             const checkDeskConflict = (desk, date, currentStaffName) => {
                 if (!desk) return null;
-                
+
                 const dateStr = formatDate(date);
                 for (const [key, assignment] of Object.entries(assignments)) {
-                    // Key format is "StaffName-YYYY-MM-DD"
-                    // Find the last occurrence of a date pattern
                     const lastDashIndex = key.lastIndexOf('-');
                     const secondLastDashIndex = key.lastIndexOf('-', lastDashIndex - 1);
                     const thirdLastDashIndex = key.lastIndexOf('-', secondLastDashIndex - 1);
-                    
+
                     const staffName = key.substring(0, thirdLastDashIndex);
                     const assignmentDate = key.substring(thirdLastDashIndex + 1);
-                    
-                    if (assignmentDate === dateStr && 
-                        assignment.desk === desk && 
+
+                    if (assignmentDate === dateStr &&
+                        assignment.desk === desk &&
                         staffName !== currentStaffName) {
                         return staffName;
                     }
@@ -214,8 +208,7 @@ setLoading(false);
 
             const saveAssignment = async (data) => {
                 const key = `${data.staffName}-${data.date}`;
-                
-                // Update local state immediately for responsive UI
+
                 setAssignments(prev => ({
                     ...prev,
                     [key]: {
@@ -226,11 +219,10 @@ setLoading(false);
                         clientName: data.clientName || ''
                     }
                 }));
-                
+
                 setModalOpen(false);
                 setCurrentAssignment(null);
-                
-                // Save to Google Sheets in background
+
                 try {
                     const response = await fetch(APPS_SCRIPT_URL, {
                         method: 'POST',
@@ -259,17 +251,15 @@ setLoading(false);
 
             const deleteAssignment = async () => {
                 if (currentAssignment) {
-                    // Update local state immediately
                     setAssignments(prev => {
                         const newAssignments = { ...prev };
                         delete newAssignments[currentAssignment.key];
                         return newAssignments;
                     });
-                    
+
                     setModalOpen(false);
                     setCurrentAssignment(null);
-                    
-                    // Delete from Google Sheets in background
+
                     try {
                         const response = await fetch(APPS_SCRIPT_URL, {
                             method: 'POST',
@@ -324,7 +314,10 @@ setLoading(false);
                 const dateStr = formatDate(date);
                 for (const [key, assignment] of Object.entries(assignments)) {
                     if (key.includes(dateStr) && assignment.desk === desk) {
-                        return key.split('-')[0];
+                        const lastDashIndex = key.lastIndexOf('-');
+                        const secondLastDashIndex = key.lastIndexOf('-', lastDashIndex - 1);
+                        const thirdLastDashIndex = key.lastIndexOf('-', secondLastDashIndex - 1);
+                        return key.substring(0, thirdLastDashIndex);
                     }
                 }
                 return null;
@@ -355,12 +348,11 @@ setLoading(false);
                     ...teams,
                     [teamName]: [...teams[teamName], staffData]
                 };
-                
+
                 setTeams(updatedTeams);
                 setStaffModalOpen(false);
                 setEditingStaff(null);
-                
-                // Save to Google Sheets
+
                 try {
                     await fetch(APPS_SCRIPT_URL, {
                         method: 'POST',
@@ -378,29 +370,38 @@ setLoading(false);
             const updateStaffMember = async (teamName, oldName, newData) => {
                 const updatedTeams = {
                     ...teams,
-                    [teamName]: teams[teamName].map(member => 
+                    [teamName]: teams[teamName].map(member =>
                         member.name === oldName ? newData : member
                     )
                 };
-                
+
                 setTeams(updatedTeams);
-                
+
                 // Update assignments with new name if name changed
                 if (oldName !== newData.name) {
                     setAssignments(prev => {
                         const updated = {};
                         Object.entries(prev).forEach(([key, value]) => {
-                            const newKey = key.replace(oldName, newData.name);
-                            updated[newKey] = value;
+                            // Parse the key properly to avoid partial replacements
+                            const parts = key.split('-');
+                            if (parts.length >= 4) {
+                                const dateStr = parts.slice(-3).join('-');
+                                const staffName = parts.slice(0, -3).join('-');
+                                const newKey = staffName === oldName
+                                    ? `${newData.name}-${dateStr}`
+                                    : key;
+                                updated[newKey] = value;
+                            } else {
+                                updated[key] = value;
+                            }
                         });
                         return updated;
                     });
                 }
-                
+
                 setStaffModalOpen(false);
                 setEditingStaff(null);
-                
-                // Save to Google Sheets
+
                 try {
                     await fetch(APPS_SCRIPT_URL, {
                         method: 'POST',
@@ -416,60 +417,41 @@ setLoading(false);
             };
 
             const removeStaffMember = async (teamName, staffName) => {
-                try {
-                    alert(`DEBUG: removeStaffMember called for ${staffName} in ${teamName}`);
-                    
-                    if (!confirm(`Remove ${staffName} from ${teamName}? This will also delete all their assignments.`)) {
-                        alert('DEBUG: User cancelled removal');
-                        return;
-                    }
-                    
-                    alert('DEBUG: User confirmed removal, updating state...');
-                    
-                    const updatedTeams = {
-                        ...teams,
-                        [teamName]: teams[teamName].filter(member => member.name !== staffName)
-                    };
-                    
-                    setTeams(updatedTeams);
-                    alert('DEBUG: State updated, now removing assignments...');
-                    
-                    // Remove all assignments for this staff member
-                    setAssignments(prev => {
-                        const updated = {};
-                        Object.entries(prev).forEach(([key, value]) => {
-                            if (!key.startsWith(staffName + '-')) {
-                                updated[key] = value;
-                            }
-                        });
-                        return updated;
+                if (!confirm(`Remove ${staffName} from ${teamName}? This will also delete all their assignments.`)) {
+                    return;
+                }
+
+                const updatedTeams = {
+                    ...teams,
+                    [teamName]: teams[teamName].filter(member => member.name !== staffName)
+                };
+
+                setTeams(updatedTeams);
+
+                // Remove all assignments for this staff member
+                setAssignments(prev => {
+                    const updated = {};
+                    Object.entries(prev).forEach(([key, value]) => {
+                        if (!key.startsWith(staffName + '-')) {
+                            updated[key] = value;
+                        }
                     });
-                    
-                    alert('DEBUG: Assignments removed, now saving to Google Sheets...');
-                    
-                    // Save to Google Sheets
-                    if (APPS_SCRIPT_URL === 'PASTE_YOUR_WEB_APP_URL_HERE') {
-                        alert('WARNING: Google Apps Script URL not configured! Changes will be lost on refresh.');
-                        return;
-                    }
-                    
-                    try {
-                        const response = await fetch(APPS_SCRIPT_URL, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                action: 'saveTeams',
-                                teams: updatedTeams
-                            })
-                        });
-                        const result = await response.json();
-                        alert('DEBUG: Saved to Google Sheets successfully!');
-                    } catch (error) {
-                        console.error('Error saving teams:', error);
-                        alert('Warning: Staff member removed locally but may not have synced to Google Sheets. Error: ' + error.message);
-                    }
+                    return updated;
+                });
+
+                try {
+                    const response = await fetch(APPS_SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'saveTeams',
+                            teams: updatedTeams
+                        })
+                    });
+                    const result = await response.json();
+                    console.log('Staff member removed successfully');
                 } catch (error) {
-                    alert('CRITICAL ERROR in removeStaffMember: ' + error.message);
-                    console.error('Full error:', error);
+                    console.error('Error saving teams:', error);
+                    alert('Warning: Staff member removed locally but may not have synced to Google Sheets.');
                 }
             };
 
@@ -479,12 +461,11 @@ setLoading(false);
                         ...teams,
                         [teamName]: []
                     };
-                    
+
                     setTeams(updatedTeams);
                     setSelectedTeam(teamName);
                     setTeamModalOpen(false);
-                    
-                    // Save to Google Sheets
+
                     try {
                         await fetch(APPS_SCRIPT_URL, {
                             method: 'POST',
@@ -506,29 +487,29 @@ setLoading(false);
                 if (confirm(`Delete team "${teamName}" and all its members? This will also delete all assignments for this team.`)) {
                     const updatedTeams = { ...teams };
                     delete updatedTeams[teamName];
-                    
+
                     setTeams(updatedTeams);
-                    
+
                     // Remove all assignments for team members
                     const teamMembers = teams[teamName].map(m => m.name);
                     setAssignments(prev => {
                         const updated = {};
                         Object.entries(prev).forEach(([key, value]) => {
-                            const staffName = key.split('-')[0];
+                            const parts = key.split('-');
+                            const staffName = parts.slice(0, -3).join('-');
                             if (!teamMembers.includes(staffName)) {
                                 updated[key] = value;
                             }
                         });
                         return updated;
                     });
-                    
+
                     // Select first remaining team
-                    const remainingTeams = Object.keys(teams).filter(t => t !== teamName);
+                    const remainingTeams = Object.keys(updatedTeams);
                     if (remainingTeams.length > 0) {
                         setSelectedTeam(remainingTeams[0]);
                     }
-                    
-                    // Save to Google Sheets
+
                     try {
                         await fetch(APPS_SCRIPT_URL, {
                             method: 'POST',
@@ -557,88 +538,90 @@ setLoading(false);
                     console.error('Error saving offices:', error);
                     alert('Warning: Office changes may not have synced to Google Sheets.');
                 }
-            };const addDesk = async (officeName, deskName) => {
-    const updatedOffices = {
-        ...offices,
-        [officeName]: [...offices[officeName], deskName]
-    };
-    setOffices(updatedOffices);
-    setDeskModalOpen(false);
-    setEditingDesk(null);
-    await saveOffices(updatedOffices);
-};
+            };
 
-const updateDesk = async (officeName, oldDeskName, newDeskName) => {
-    const updatedOffices = {
-        ...offices,
-        [officeName]: offices[officeName].map(desk => desk === oldDeskName ? newDeskName : desk)
-    };
-    setOffices(updatedOffices);
-    
-    setAssignments(prev => {
-        const updated = {};
-        Object.entries(prev).forEach(([key, value]) => {
-            if (value.desk === oldDeskName) {
-                updated[key] = {...value, desk: newDeskName};
-            } else {
-                updated[key] = value;
-            }
-        });
-        return updated;
-    });
-    
-    setDeskModalOpen(false);
-    setEditingDesk(null);
-    await saveOffices(updatedOffices);
-};
+            const addDesk = async (officeName, deskName) => {
+                const updatedOffices = {
+                    ...offices,
+                    [officeName]: [...offices[officeName], deskName]
+                };
+                setOffices(updatedOffices);
+                setDeskModalOpen(false);
+                setEditingDesk(null);
+                await saveOffices(updatedOffices);
+            };
 
-const removeDesk = async (officeName, deskName) => {
-    if (!confirm(`Remove desk "${deskName}"? Assignments using this desk will have desk removed.`)) return;
-    
-    const updatedOffices = {
-        ...offices,
-        [officeName]: offices[officeName].filter(desk => desk !== deskName)
-    };
-    setOffices(updatedOffices);
-    
-    setAssignments(prev => {
-        const updated = {};
-        Object.entries(prev).forEach(([key, value]) => {
-            if (value.desk === deskName) {
-                updated[key] = {...value, desk: ''};
-            } else {
-                updated[key] = value;
-            }
-        });
-        return updated;
-    });
-    
-    await saveOffices(updatedOffices);
-};
+            const updateDesk = async (officeName, oldDeskName, newDeskName) => {
+                const updatedOffices = {
+                    ...offices,
+                    [officeName]: offices[officeName].map(desk => desk === oldDeskName ? newDeskName : desk)
+                };
+                setOffices(updatedOffices);
 
-const addOffice = async (officeName) => {
-    if (!officeName || offices[officeName]) {
-        setOfficeModalOpen(false);
-        return;
-    }
-    
-    const updatedOffices = {
-        ...offices,
-        [officeName]: []
-    };
-    setOffices(updatedOffices);
-    setOfficeModalOpen(false);
-    await saveOffices(updatedOffices);
-};
+                setAssignments(prev => {
+                    const updated = {};
+                    Object.entries(prev).forEach(([key, value]) => {
+                        if (value.desk === oldDeskName) {
+                            updated[key] = {...value, desk: newDeskName};
+                        } else {
+                            updated[key] = value;
+                        }
+                    });
+                    return updated;
+                });
 
-const removeOffice = async (officeName) => {
-    if (!confirm(`Delete office "${officeName}" and all its desks?`)) return;
-    
-    const updatedOffices = {...offices};
-    delete updatedOffices[officeName];
-    setOffices(updatedOffices);
-    await saveOffices(updatedOffices);
-};
+                setDeskModalOpen(false);
+                setEditingDesk(null);
+                await saveOffices(updatedOffices);
+            };
+
+            const removeDesk = async (officeName, deskName) => {
+                if (!confirm(`Remove desk "${deskName}"? Assignments using this desk will have desk removed.`)) return;
+
+                const updatedOffices = {
+                    ...offices,
+                    [officeName]: offices[officeName].filter(desk => desk !== deskName)
+                };
+                setOffices(updatedOffices);
+
+                setAssignments(prev => {
+                    const updated = {};
+                    Object.entries(prev).forEach(([key, value]) => {
+                        if (value.desk === deskName) {
+                            updated[key] = {...value, desk: ''};
+                        } else {
+                            updated[key] = value;
+                        }
+                    });
+                    return updated;
+                });
+
+                await saveOffices(updatedOffices);
+            };
+
+            const addOffice = async (officeName) => {
+                if (!officeName || offices[officeName]) {
+                    setOfficeModalOpen(false);
+                    return;
+                }
+
+                const updatedOffices = {
+                    ...offices,
+                    [officeName]: []
+                };
+                setOffices(updatedOffices);
+                setOfficeModalOpen(false);
+                await saveOffices(updatedOffices);
+            };
+
+            const removeOffice = async (officeName) => {
+                if (!confirm(`Delete office "${officeName}" and all its desks?`)) return;
+
+                const updatedOffices = {...offices};
+                delete updatedOffices[officeName];
+                setOffices(updatedOffices);
+                await saveOffices(updatedOffices);
+            };
 
             const stats = getStats();
             const totalStaff = Object.values(teams).flat().length;
@@ -655,7 +638,6 @@ const removeOffice = async (officeName) => {
                     <div style={styles.header}>
                         <h1 style={styles.title}>📅 John Kasperek Co. Scheduling</h1>
                         <div style={styles.headerControls}>
-                            {/* Week/Month View Toggle */}
                             {viewMode === 'schedule' && (
                                 <div style={styles.viewToggle}>
                                     <button
@@ -673,29 +655,27 @@ const removeOffice = async (officeName) => {
                                 </div>
                             )}
 
-                            {/* Week/Month Navigation */}
                             <div style={styles.weekNav}>
-                                <button 
-                                    onClick={scheduleView === 'week' ? prevWeek : prevMonth} 
+                                <button
+                                    onClick={scheduleView === 'week' ? prevWeek : prevMonth}
                                     style={styles.navButton}
                                 >
                                     ◀ Prev
                                 </button>
                                 <div style={styles.weekDisplay}>
-                                    {scheduleView === 'week' 
+                                    {scheduleView === 'week'
                                         ? `Week of ${currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
                                         : currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
                                     }
                                 </div>
-                                <button 
-                                    onClick={scheduleView === 'week' ? nextWeek : nextMonth} 
+                                <button
+                                    onClick={scheduleView === 'week' ? nextWeek : nextMonth}
                                     style={styles.navButton}
                                 >
                                     Next ▶
                                 </button>
                             </div>
 
-                            {/* Page View Toggle */}
                             <div style={styles.viewToggle}>
                                 <button
                                     onClick={() => setViewMode('schedule')}
@@ -713,23 +693,22 @@ const removeOffice = async (officeName) => {
                                     onClick={() => setViewMode('teams')}
                                     style={{...styles.viewButton, ...(viewMode === 'teams' ? styles.viewButtonActive : {})}}
                                 >
-                                Manage Teams
-                            </button>
-                            <button
-                                onClick={() => setViewMode('manageDesks')}
-                                style={{...styles.viewButton, ...(viewMode === 'manageDesks' ? styles.viewButtonActive : {})}}
-                            >
-                                Manage Desks
-                            </button>
-                        </div>
+                                    Manage Teams
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('manageDesks')}
+                                    style={{...styles.viewButton, ...(viewMode === 'manageDesks' ? styles.viewButtonActive : {})}}
+                                >
+                                    Manage Desks
+                                </button>
+                            </div>
 
-                            {/* Bulk Schedule Button */}
                             {viewMode === 'schedule' && (
                                 <button
                                     onClick={() => setBulkScheduleModalOpen(true)}
                                     style={styles.bulkScheduleButton}
                                 >
-                                    📅 Bulk Schedule Month
+                                    📅 Bulk Schedule
                                 </button>
                             )}
                         </div>
@@ -802,8 +781,8 @@ const removeOffice = async (officeName) => {
                                                             {assignment && (
                                                                 <div style={styles.assignment}>
                                                                     <div style={styles.assignmentLocation}>
-                                                                        {assignment.location === 'Client' && assignment.clientName 
-                                                                            ? `${assignment.clientName}` 
+                                                                        {assignment.location === 'Client' && assignment.clientName
+                                                                            ? `${assignment.clientName}`
                                                                             : assignment.location}
                                                                     </div>
                                                                     <div style={styles.assignmentTask}>
@@ -822,14 +801,12 @@ const removeOffice = async (officeName) => {
                                     </div>
                                 ) : (
                                     <div>
-                                        {/* Month Calendar Header */}
                                         <div style={styles.monthCalendarHeader}>
                                             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                                                 <div key={day} style={styles.monthDayHeader}>{day}</div>
                                             ))}
                                         </div>
-                                        
-                                        {/* Month Calendar Grid */}
+
                                         <div style={styles.monthCalendarGrid}>
                                             {getDaysInMonth().map((date, i) => (
                                                 <div key={i} style={date ? styles.monthDayCell : styles.monthEmptyCell}>
@@ -841,8 +818,8 @@ const removeOffice = async (officeName) => {
                                                                     const key = `${person.name}-${formatDate(date)}`;
                                                                     const assignment = assignments[key];
                                                                     if (assignment) {
-                                                                        const displayLocation = assignment.location === 'Client' && assignment.clientName 
-                                                                            ? assignment.clientName 
+                                                                        const displayLocation = assignment.location === 'Client' && assignment.clientName
+                                                                            ? assignment.clientName
                                                                             : assignment.location;
                                                                         return (
                                                                             <div
@@ -860,8 +837,7 @@ const removeOffice = async (officeName) => {
                                                                 <div
                                                                     style={styles.addAssignmentBtn}
                                                                     onClick={() => {
-                                                                        // Show a simple selector for staff member
-                                                                        const staffName = prompt(`Select staff member from ${selectedTeam}:\n\n` + 
+                                                                        const staffName = prompt(`Select staff member from ${selectedTeam}:\n\n` +
                                                                             teams[selectedTeam].map((p, i) => `${i+1}. ${p.name}`).join('\n') +
                                                                             '\n\nEnter the number:');
                                                                         if (staffName) {
@@ -909,70 +885,70 @@ const removeOffice = async (officeName) => {
                                 </div>
                             ))}
                         </div>
-                            ) : viewMode === 'manageDesks' ? (
-    <div style={styles.deskManagement}>
-        <div style={styles.managementHeader}>
-            <h2 style={styles.managementTitle}>Desk & Office Management</h2>
-            <button onClick={() => setOfficeModalOpen(true)} style={styles.addTeamBtn}>
-                + Add New Office
-            </button>
-        </div>
-
-        {Object.entries(offices).map(([officeName, desks]) => (
-            <div key={officeName} style={styles.teamManagementCard}>
-                <div style={styles.teamCardHeader}>
-                    <h3 style={styles.teamCardTitle}>🏢 {officeName}</h3>
-                    <div style={styles.teamCardActions}>
-                        <button 
-                            onClick={() => {
-                                setEditingDesk({ officeName, isNew: true });
-                                setDeskModalOpen(true);
-                            }} 
-                            style={styles.addStaffBtn}
-                        >
-                            + Add Desk
-                        </button>
-                        <button 
-                            onClick={() => removeOffice(officeName)} 
-                            style={styles.deleteTeamBtn}
-                        >
-                            Delete Office
-                        </button>
-                    </div>
-                </div>
-                <div style={styles.staffMembersList}>
-                    {desks.length === 0 ? (
-                        <p style={styles.emptyTeam}>No desks in this office yet.</p>
-                    ) : (
-                        desks.map(desk => (
-                            <div key={desk} style={styles.staffMemberCard}>
-                                <div>
-                                    <div style={styles.memberName}>{desk}</div>
-                                </div>
-                                <div style={styles.memberActions}>
-                                    <button 
-                                        onClick={() => {
-                                            setEditingDesk({ officeName, desk, isNew: false });
-                                            setDeskModalOpen(true);
-                                        }}
-                                        style={styles.editBtn}
-                                    >
-                                        Edit
-                                    </button>
-                                    <button 
-                                        onClick={() => removeDesk(officeName, desk)}
-                                        style={styles.removeBtn}
-                                    >
-                                        Remove
-                                    </button>
-                                </div>
+                    ) : viewMode === 'manageDesks' ? (
+                        <div style={styles.deskManagement}>
+                            <div style={styles.managementHeader}>
+                                <h2 style={styles.managementTitle}>Desk & Office Management</h2>
+                                <button onClick={() => setOfficeModalOpen(true)} style={styles.addTeamBtn}>
+                                    + Add New Office
+                                </button>
                             </div>
-                        ))
-                    )}
-                </div>
-            </div>
-        ))}
-    </div>
+
+                            {Object.entries(offices).map(([officeName, desks]) => (
+                                <div key={officeName} style={styles.teamManagementCard}>
+                                    <div style={styles.teamCardHeader}>
+                                        <h3 style={styles.teamCardTitle}>🏢 {officeName}</h3>
+                                        <div style={styles.teamCardActions}>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingDesk({ officeName, isNew: true });
+                                                    setDeskModalOpen(true);
+                                                }}
+                                                style={styles.addStaffBtn}
+                                            >
+                                                + Add Desk
+                                            </button>
+                                            <button
+                                                onClick={() => removeOffice(officeName)}
+                                                style={styles.deleteTeamBtn}
+                                            >
+                                                Delete Office
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div style={styles.staffMembersList}>
+                                        {desks.length === 0 ? (
+                                            <p style={styles.emptyTeam}>No desks in this office yet.</p>
+                                        ) : (
+                                            desks.map(desk => (
+                                                <div key={desk} style={styles.staffMemberCard}>
+                                                    <div>
+                                                        <div style={styles.memberName}>{desk}</div>
+                                                    </div>
+                                                    <div style={styles.memberActions}>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingDesk({ officeName, desk, isNew: false });
+                                                                setDeskModalOpen(true);
+                                                            }}
+                                                            style={styles.editBtn}
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => removeDesk(officeName, desk)}
+                                                            style={styles.removeBtn}
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     ) : (
                         <div style={styles.teamManagement}>
                             <div style={styles.managementHeader}>
@@ -987,17 +963,17 @@ const removeOffice = async (officeName) => {
                                     <div style={styles.teamCardHeader}>
                                         <h3 style={styles.teamCardTitle}>{teamName}</h3>
                                         <div style={styles.teamCardActions}>
-                                            <button 
+                                            <button
                                                 onClick={() => {
                                                     setEditingStaff({ teamName, isNew: true });
                                                     setStaffModalOpen(true);
-                                                }} 
+                                                }}
                                                 style={styles.addStaffBtn}
                                             >
                                                 + Add Staff
                                             </button>
-                                            <button 
-                                                onClick={() => removeTeam(teamName)} 
+                                            <button
+                                                onClick={() => removeTeam(teamName)}
                                                 style={styles.deleteTeamBtn}
                                             >
                                                 Delete Team
@@ -1015,7 +991,7 @@ const removeOffice = async (officeName) => {
                                                         <div style={styles.memberRole}>{member.role}</div>
                                                     </div>
                                                     <div style={styles.memberActions}>
-                                                        <button 
+                                                        <button
                                                             onClick={() => {
                                                                 setEditingStaff({ teamName, member, isNew: false });
                                                                 setStaffModalOpen(true);
@@ -1024,7 +1000,7 @@ const removeOffice = async (officeName) => {
                                                         >
                                                             Edit
                                                         </button>
-                                                        <button 
+                                                        <button
                                                             onClick={(e) => {
                                                                 e.preventDefault();
                                                                 removeStaffMember(teamName, member.name);
@@ -1089,13 +1065,11 @@ const removeOffice = async (officeName) => {
                             offices={offices}
                             assignments={assignments}
                             onSave={async (bulkAssignments) => {
-                                // Update local state immediately
                                 setAssignments(prev => ({...prev, ...bulkAssignments}));
                                 setBulkScheduleModalOpen(false);
-                                
-                                // Save all assignments to Google Sheets in background
+
                                 try {
-                                    const savePromises = Object.entries(bulkAssignments).map(([key, assignment]) => 
+                                    const savePromises = Object.entries(bulkAssignments).map(([key, assignment]) =>
                                         fetch(APPS_SCRIPT_URL, {
                                             method: 'POST',
                                             body: JSON.stringify({
@@ -1113,35 +1087,36 @@ const removeOffice = async (officeName) => {
                             }}
                             onClose={() => setBulkScheduleModalOpen(false)}
                         />
-                    )}{deskModalOpen && (
-    <DeskModal
-        editingDesk={editingDesk}
-        onSave={(deskName) => {
-            if (editingDesk.isNew) {
-                addDesk(editingDesk.officeName, deskName);
-            } else {
-                updateDesk(editingDesk.officeName, editingDesk.desk, deskName);
-            }
-        }}
-        onClose={() => {
-            setDeskModalOpen(false);
-            setEditingDesk(null);
-        }}
-    />
-)}
+                    )}
 
-{officeModalOpen && (
-    <OfficeModal
-        onSave={addOffice}
-        onClose={() => setOfficeModalOpen(false)}
-    />
-)}
+                    {deskModalOpen && (
+                        <DeskModal
+                            editingDesk={editingDesk}
+                            onSave={(deskName) => {
+                                if (editingDesk.isNew) {
+                                    addDesk(editingDesk.officeName, deskName);
+                                } else {
+                                    updateDesk(editingDesk.officeName, editingDesk.desk, deskName);
+                                }
+                            }}
+                            onClose={() => {
+                                setDeskModalOpen(false);
+                                setEditingDesk(null);
+                            }}
+                        />
+                    )}
+
+                    {officeModalOpen && (
+                        <OfficeModal
+                            onSave={addOffice}
+                            onClose={() => setOfficeModalOpen(false)}
+                        />
+                    )}
                     </>
                     )}
                 </div>
             );
         };
-                    
 
         const AssignmentModal = ({ assignment, offices, onSave, onDelete, onClose, checkDeskConflict }) => {
             const [formData, setFormData] = useState({
@@ -1167,13 +1142,13 @@ const removeOffice = async (officeName) => {
 
             const handleSubmit = (e) => {
                 e.preventDefault();
-                
+
                 if (deskConflict) {
                     if (!confirm(`Warning: ${deskConflict} is already assigned to ${formData.desk} on this date. Do you want to proceed anyway? This will create a conflict.`)) {
                         return;
                     }
                 }
-                
+
                 onSave(formData);
             };
 
@@ -1198,11 +1173,11 @@ const removeOffice = async (officeName) => {
                                     value={(() => {
                                         const [year, month, day] = formData.date.split('-');
                                         const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                                        return dateObj.toLocaleDateString('en-US', { 
-                                            weekday: 'long', 
-                                            year: 'numeric', 
-                                            month: 'long', 
-                                            day: 'numeric' 
+                                        return dateObj.toLocaleDateString('en-US', {
+                                            weekday: 'long',
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric'
                                         });
                                     })()}
                                     style={styles.input}
@@ -1404,64 +1379,7 @@ const removeOffice = async (officeName) => {
             );
         };
 
-        const BulkScheduleModal = ({ teams, selectedTeam, currentMonth, offices, assignments, onSave, onClose }) => {
-            const [formData, setFormData] = useState({
-                location: '',
-                task: '',
-                desk: '',
-                clientName: '',
-                classification: 'Audit',
-                dateRangeType: 'month', // 'month' or 'custom'
-                startDate: '',
-                endDate: '',
-                daysOfWeek: {
-                    monday: true,
-                    tuesday: true,
-                    wednesday: true,
-                    thursday: true,
-                    friday: true,
-                    saturday: false,
-                    sunday: false
-                },
-                applyToStaff: 'all' // 'all' or specific staff member names
-            });
-
-            const teamMembers = teams[selectedTeam] || [];
-            const [selectedStaff, setSelectedStaff] = useState([]);
-            const [conflictWarning, setConflictWarning] = useState('');
-
-            // Initialize date range when switching to custom
-            useEffect(() => {
-                if (formData.dateRangeType === 'custom' && !formData.startDate) {
-                    const today = new Date();
-                    const nextWeek = new Date(today);
-                    nextWeek.setDate(nextWeek.getDate() + 14);
-                    
-                    setFormData(prev => ({
-                        ...prev,
-                        startDate: today.toISOString().split('T')[0],
-                        endDate: nextWeek.toISOString().split('T')[0]
-                    }));
-                }
-            }, [formData.dateRangeType]);
-
-            // Get the date range to schedule based on type
-            const getDateRange = () => {
-                if (formData.dateRangeType === 'month') {
-                    const year = currentMonth.getFullYear();
-                    const month = currentMonth.getMonth();
-                    return {
-                        start: new Date(year, month, 1),
-                        end: new Date(year, month + 1, 0)
-                    };
-                } else {
-                    return {
-                        start: new Date(formData.startDate),
-                        end: new Date(formData.endDate)
-                    };
-                }
-            };
- const DeskModal = ({ editingDesk, onSave, onClose }) => {
+        const DeskModal = ({ editingDesk, onSave, onClose }) => {
             const [deskName, setDeskName] = useState(editingDesk?.desk || '');
 
             const handleSubmit = (e) => {
@@ -1537,7 +1455,63 @@ const removeOffice = async (officeName) => {
                 </div>
             );
         };
-            // Check for desk conflicts in bulk scheduling
+
+        const BulkScheduleModal = ({ teams, selectedTeam, currentMonth, offices, assignments, onSave, onClose }) => {
+            const [formData, setFormData] = useState({
+                location: '',
+                task: '',
+                desk: '',
+                clientName: '',
+                classification: 'Audit',
+                dateRangeType: 'month',
+                startDate: '',
+                endDate: '',
+                daysOfWeek: {
+                    monday: true,
+                    tuesday: true,
+                    wednesday: true,
+                    thursday: true,
+                    friday: true,
+                    saturday: false,
+                    sunday: false
+                },
+                applyToStaff: 'all'
+            });
+
+            const teamMembers = teams[selectedTeam] || [];
+            const [selectedStaff, setSelectedStaff] = useState([]);
+            const [conflictWarning, setConflictWarning] = useState('');
+
+            useEffect(() => {
+                if (formData.dateRangeType === 'custom' && !formData.startDate) {
+                    const today = new Date();
+                    const nextWeek = new Date(today);
+                    nextWeek.setDate(nextWeek.getDate() + 14);
+
+                    setFormData(prev => ({
+                        ...prev,
+                        startDate: today.toISOString().split('T')[0],
+                        endDate: nextWeek.toISOString().split('T')[0]
+                    }));
+                }
+            }, [formData.dateRangeType]);
+
+            const getDateRange = () => {
+                if (formData.dateRangeType === 'month') {
+                    const year = currentMonth.getFullYear();
+                    const month = currentMonth.getMonth();
+                    return {
+                        start: new Date(year, month, 1),
+                        end: new Date(year, month + 1, 0)
+                    };
+                } else {
+                    return {
+                        start: new Date(formData.startDate),
+                        end: new Date(formData.endDate)
+                    };
+                }
+            };
+
             useEffect(() => {
                 if (!formData.desk || (formData.location !== 'Calumet City' && formData.location !== 'Mokena')) {
                     setConflictWarning('');
@@ -1550,7 +1524,7 @@ const removeOffice = async (officeName) => {
                 }
 
                 const { start: startDate, end: endDate } = getDateRange();
-                
+
                 const dayMapping = {
                     sunday: 0,
                     monday: 1,
@@ -1561,34 +1535,33 @@ const removeOffice = async (officeName) => {
                     saturday: 6
                 };
 
-                const staffToSchedule = formData.applyToStaff === 'all' 
-                    ? teamMembers 
+                const staffToSchedule = formData.applyToStaff === 'all'
+                    ? teamMembers
                     : teamMembers.filter(m => selectedStaff.includes(m.name));
 
                 let conflictDays = [];
-                
-                // Iterate through all days in the range
+
                 const currentDate = new Date(startDate);
                 while (currentDate <= endDate) {
                     const dayOfWeek = currentDate.getDay();
                     const dayName = Object.keys(dayMapping).find(k => dayMapping[k] === dayOfWeek);
-                    
+
                     if (formData.daysOfWeek[dayName]) {
                         const dateStr = currentDate.toISOString().split('T')[0];
-                        
-                        // Check existing assignments for this desk on this date
+
                         const existingAssignments = Object.entries(assignments).filter(([key, assignment]) => {
-                            return key.includes(dateStr) && 
+                            return key.includes(dateStr) &&
                                    assignment.desk === formData.desk &&
                                    !staffToSchedule.some(s => key.startsWith(s.name + '-'));
                         });
 
                         if (existingAssignments.length > 0) {
-                            const conflictingStaff = existingAssignments[0][0].split('-')[0];
+                            const parts = existingAssignments[0][0].split('-');
+                            const conflictingStaff = parts.slice(0, -3).join('-');
                             conflictDays.push(`${currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${conflictingStaff})`);
                         }
                     }
-                    
+
                     currentDate.setDate(currentDate.getDate() + 1);
                 }
 
@@ -1605,8 +1578,7 @@ const removeOffice = async (officeName) => {
 
             const handleSubmit = (e) => {
                 e.preventDefault();
-                
-                // Validate custom date range
+
                 if (formData.dateRangeType === 'custom') {
                     if (!formData.startDate || !formData.endDate) {
                         alert('Please select both start and end dates.');
@@ -1617,16 +1589,15 @@ const removeOffice = async (officeName) => {
                         return;
                     }
                 }
-                
-                // Confirm if there are conflicts
+
                 if (conflictWarning) {
                     if (!confirm(`${conflictWarning}\n\nDo you want to proceed anyway? This will create conflicting desk assignments.`)) {
                         return;
                     }
                 }
-                
+
                 const { start: startDate, end: endDate } = getDateRange();
-                
+
                 const dayMapping = {
                     sunday: 0,
                     monday: 1,
@@ -1636,20 +1607,17 @@ const removeOffice = async (officeName) => {
                     friday: 5,
                     saturday: 6
                 };
-                
-                // Create assignments for selected days
+
                 const newAssignments = {};
-                const staffToSchedule = formData.applyToStaff === 'all' 
-                    ? teamMembers 
+                const staffToSchedule = formData.applyToStaff === 'all'
+                    ? teamMembers
                     : teamMembers.filter(m => selectedStaff.includes(m.name));
-                
-                // Iterate through all days in the range
+
                 const currentDate = new Date(startDate);
                 while (currentDate <= endDate) {
                     const dayOfWeek = currentDate.getDay();
                     const dayName = Object.keys(dayMapping).find(k => dayMapping[k] === dayOfWeek);
-                    
-                    // Check if this day of week is selected
+
                     if (formData.daysOfWeek[dayName]) {
                         staffToSchedule.forEach(member => {
                             const dateStr = currentDate.toISOString().split('T')[0];
@@ -1663,15 +1631,15 @@ const removeOffice = async (officeName) => {
                             };
                         });
                     }
-                    
+
                     currentDate.setDate(currentDate.getDate() + 1);
                 }
-                
+
                 if (Object.keys(newAssignments).length > 0) {
-                    const dateRangeText = formData.dateRangeType === 'month' 
+                    const dateRangeText = formData.dateRangeType === 'month'
                         ? currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
                         : `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-                    
+
                     onSave(newAssignments);
                     alert(`Created ${Object.keys(newAssignments).length} assignments for ${dateRangeText}`);
                 } else {
@@ -1680,7 +1648,7 @@ const removeOffice = async (officeName) => {
             };
 
             const toggleStaff = (staffName) => {
-                setSelectedStaff(prev => 
+                setSelectedStaff(prev =>
                     prev.includes(staffName)
                         ? prev.filter(n => n !== staffName)
                         : [...prev, staffName]
@@ -1887,13 +1855,13 @@ const removeOffice = async (officeName) => {
                                     if (formData.dateRangeType === 'custom' && (!formData.startDate || !formData.endDate)) {
                                         return 'Select dates to see assignment count.';
                                     }
-                                    
+
                                     const { start, end } = getDateRange();
                                     const dayMapping = {
                                         sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
                                         thursday: 4, friday: 5, saturday: 6
                                     };
-                                    
+
                                     let matchingDays = 0;
                                     const currentDate = new Date(start);
                                     while (currentDate <= end) {
@@ -1904,14 +1872,14 @@ const removeOffice = async (officeName) => {
                                         }
                                         currentDate.setDate(currentDate.getDate() + 1);
                                     }
-                                    
+
                                     const staffCount = formData.applyToStaff === 'all' ? teamMembers.length : selectedStaff.length;
                                     const totalAssignments = matchingDays * staffCount;
-                                    
+
                                     const dateRangeText = formData.dateRangeType === 'month'
                                         ? currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
                                         : `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-                                    
+
                                     return `This will create ${totalAssignments} assignments (${matchingDays} days × ${staffCount} staff) for ${dateRangeText}.`;
                                 })()}
                             </div>
@@ -2569,7 +2537,6 @@ const removeOffice = async (officeName) => {
             }
         };
 
-        // Add CSS animation for spinner
         const styleSheet = document.createElement('style');
         styleSheet.textContent = `
             @keyframes spin {
