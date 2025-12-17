@@ -655,6 +655,11 @@
                     const date = assignment.date;
                     const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
 
+                    // For all-day events, DTEND should be the next day
+                    const nextDay = new Date(date);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    const endDateStr = nextDay.toISOString().split('T')[0].replace(/-/g, '');
+
                     const location = assignment.location === 'Client' && assignment.clientName
                         ? assignment.clientName
                         : assignment.location;
@@ -664,7 +669,7 @@
 
                     icsContent += 'BEGIN:VEVENT\r\n';
                     icsContent += 'DTSTART;VALUE=DATE:' + dateStr + '\r\n';
-                    icsContent += 'DTEND;VALUE=DATE:' + dateStr + '\r\n';
+                    icsContent += 'DTEND;VALUE=DATE:' + endDateStr + '\r\n';
                     icsContent += 'SUMMARY:' + summary + '\r\n';
                     icsContent += 'DESCRIPTION:' + description.replace(/\n/g, '\\n') + '\r\n';
                     if (assignment.desk) {
